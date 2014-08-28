@@ -21,7 +21,27 @@
 
 var argscheck = require('cordova/argscheck'),
     exec = require('cordova/exec'),
-    GlobalizationError = require('./GlobalizationError');
+    GlobalizationError = require('./GlobalizationError'),
+    noop = function () {},
+    events = ["languagechanged", "regionchanged"],
+    channels = events.map(function (eventName) {
+        var thisChannel = cordova.addDocumentEventHandler(eventName),
+            success = function (data) {
+                thisChannel.fire(data);
+            },
+            fail = function (error) {
+                console.log("Error initializing " + eventName + " listener: ", error);
+            };
+        thisChannel.onHasSubscribersChange = function () {
+            if (this.numHandlers === 1) {
+                exec(success, fail, "Globalization","startEvent", {eventName: eventName});
+            } else if (this.numHandlers === 0) {
+                exec(noop, noop, "Globalization", "stopEvent", {eventName: eventName});
+            }
+        };
+        return thisChannel;
+    });
+
 
 var globalization = {
 

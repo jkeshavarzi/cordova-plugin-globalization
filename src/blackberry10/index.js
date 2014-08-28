@@ -19,9 +19,81 @@
  *
 */
 
-var g11n;
+var g11n,
+    applicationEvents = require("../../lib/events/applicationEvents"),
+    actionMap = {
+        languagechanged: {
+            context: applicationEvents,
+            event: "systemLanguageChange",
+            triggerEvent: "languagechanged",
+            trigger: function (pluginResult, language) {
+                pluginResult.callbackOk(language, true);
+            }
+        },
+        regionchanged: {
+            context: applicationEvents,
+            event: "systemRegionChange",
+            triggerEvent: "regionchanged",
+            trigger: function (pluginResult, region) {
+                pluginResult.callbackOk(region, true);
+            }
+        }
+    },
+    listeners = {};
 
 var globalization = {
+    /**
+    * Starts an application event.
+    *
+    * @param {Function} successCB
+    * @param {Function} errorCB
+    *
+    */
+    startEvent: function (successCB, failCB, args, env) {
+        var result = new PluginResult(args, env),
+            eventName = JSON.parse(decodeURIComponent(args.eventName)),
+            context = actionMap[eventName].context,
+            systemEvent = actionMap[eventName].event,
+            listener = actionMap[eventName].trigger.bind(null, result);
+
+        if (!listeners[eventName]) {
+            listeners[eventName] = {};
+        }
+
+        if (listeners[eventName][env.webview.id]) {
+            //TODO: Change back to erroring out after reset is implemented
+            //result.error("Underlying listener for " + eventName + " already running for webview " + env.webview.id);
+            context.removeEventListener(systemEvent, listeners[eventName][env.webview.id]);
+        }
+
+        context.addEventListener(systemEvent, listener);
+        listeners[eventName][env.webview.id] = listener;
+        result.noResult(true);
+    },
+
+    /**
+    * Stops an application event.
+    *
+    * @param {Function} successCB
+    * @param {Function} errorCB
+    *
+    */
+    stopEvent: function (success, fail, args, env) {
+        var result = new PluginResult(args, env),
+            eventName = JSON.parse(decodeURIComponent(args.eventName)),
+            listener = listeners[eventName][env.webview.id],
+            context = actionMap[eventName].context,
+            systemEvent = actionMap[eventName].event;
+
+        if (!listener) {
+            result.error("Underlying listener for " + eventName + " never started for webview " + env.webview.id);
+        } else {
+            context.removeEventListener(systemEvent, listener);
+            delete listeners[eventName][env.webview.id];
+            result.noResult(false);
+        }
+    },
+
     /**
     * Returns the string identifier for the client's current language.
     * It returns the language identifier string to the successCB callback with a
