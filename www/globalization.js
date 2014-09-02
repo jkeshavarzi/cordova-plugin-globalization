@@ -34,9 +34,9 @@ var argscheck = require('cordova/argscheck'),
             };
         thisChannel.onHasSubscribersChange = function () {
             if (this.numHandlers === 1) {
-                exec(success, fail, "Globalization","startEvent", {eventName: eventName});
+                exec(success, fail, "Globalization","startEvent", [{eventName: eventName}]);
             } else if (this.numHandlers === 0) {
-                exec(noop, noop, "Globalization", "stopEvent", {eventName: eventName});
+                exec(noop, noop, "Globalization", "stopEvent", [{eventName: eventName}]);
             }
         };
         return thisChannel;

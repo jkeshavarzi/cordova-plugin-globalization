@@ -28,6 +28,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.Currency;
 import java.util.Date;
+import java.util.Hashtable;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -42,6 +43,7 @@ import org.json.JSONObject;
 
 import android.annotation.TargetApi;
 import android.text.format.Time;
+import android.content.IntentFilter;
 
 /**
  *
@@ -49,6 +51,8 @@ import android.text.format.Time;
 public class Globalization extends CordovaPlugin  {
     //GlobalizationCommand Plugin Actions
     public static final String GETLOCALENAME = "getLocaleName";
+    public static final String STARTEVENT = "startEvent";
+    public static final String STOPEVENT = "stopEvent";
     public static final String DATETOSTRING = "dateToString";
     public static final String STRINGTODATE = "stringToDate";
     public static final String GETDATEPATTERN = "getDatePattern";
@@ -85,14 +89,30 @@ public class Globalization extends CordovaPlugin  {
     public static final String PERCENT = "percent";
     public static final String CURRENCY = "currency";
     public static final String CURRENCYCODE = "currencyCode";
+    public static final String EVENTNAME = "eventName";
+
+    Hashtable<String, GlobalizationReceiver> listeners = new Hashtable<String, GlobalizationReceiver>();
 
     @Override
     public boolean execute(String action, JSONArray data, CallbackContext callbackContext) {
         JSONObject obj = new JSONObject();
+        PluginResult pr;
 
         try{
             if (action.equals(GETLOCALENAME)){
                 obj = getLocaleName();
+            }else if (action.equals(STARTEVENT)){
+                startEvent(data, callbackContext);
+                pr = new PluginResult(PluginResult.Status.NO_RESULT);
+                pr.setKeepCallback(true);
+                callbackContext.sendPluginResult(pr);
+                return true;
+            }else if (action.equals(STOPEVENT)){
+                stopEvent(data, callbackContext);
+                pr = new PluginResult(PluginResult.Status.NO_RESULT);
+                pr.setKeepCallback(false);
+                callbackContext.sendPluginResult(pr);
+                return true;
             }else if (action.equals(GETPREFERREDLANGUAGE)){
                 obj = getPreferredLanguage();
             } else if (action.equalsIgnoreCase(DATETOSTRING)) {
@@ -129,11 +149,12 @@ public class Globalization extends CordovaPlugin  {
         }catch (Exception e){
             callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.JSON_EXCEPTION));
         }
+
         return true;
     }
     /*
      * @Description: Returns a well-formed ITEF BCP 47 language tag representing
-     * the locale identifier for the client's current locale 
+     * the locale identifier for the client's current locale
      *
      * @Return: String: The BCP 47 language tag for the current locale
      */
@@ -152,7 +173,7 @@ public class Globalization extends CordovaPlugin  {
         }
 
         if( language.isEmpty() || !language.matches("\\p{Alpha}{2,8}")){
-            language = "und";       // Follow the Locale#toLanguageTag() implementation 
+            language = "und";       // Follow the Locale#toLanguageTag() implementation
                                     // which says to return "und" for Undetermined
         }else if(language.equals("iw")){
             language = "he";        // correct deprecated "Hebrew"
@@ -202,7 +223,53 @@ public class Globalization extends CordovaPlugin  {
         }
     }
     /*
-     * @Description: Returns the BCP 47 language tag for the client's 
+     * @Description: Starts the languagechange and regionchange events
+     *
+     * @throws: GlobalizationError.UNKNOWN_ERROR
+     */
+    private void startEvent(JSONArray options, CallbackContext callbackContext) throws GlobalizationError {
+        try {
+            String eventName = options.getJSONObject(0).getString(EVENTNAME);
+
+            if (listeners.containsKey(eventName)) {
+                cordova.getActivity().unregisterReceiver(listeners.get(eventName));
+            }
+
+            //Register broadcast receiver for languagechange and regionchange events
+            IntentFilter filter = new IntentFilter("android.intent.action.LOCALE_CHANGED");
+            GlobalizationReceiver receiver = new GlobalizationReceiver(callbackContext);
+            cordova.getActivity().registerReceiver(receiver, filter);
+
+            listeners.put(eventName, receiver);
+
+        } catch (Exception e) {
+            throw new GlobalizationError(GlobalizationError.UNKNOWN_ERROR);
+        }
+    }
+    /*
+     * @Description: Stops the languagechange and regionchange events
+     *
+     * @throws: GlobalizationError.UNKNOWN_ERROR
+     */
+    private void stopEvent(JSONArray options, CallbackContext callbackContext) throws GlobalizationError {
+        try {
+            String eventName = options.getJSONObject(0).getString(EVENTNAME);
+
+            if (!listeners.containsKey(eventName)) {
+                callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.ERROR, "Underlying listener for " + eventName + " never started"));
+            }
+
+            //Unregister broadcast receiver for languagechange and regionchange events
+            cordova.getActivity().unregisterReceiver(listeners.get(eventName));
+            listeners.remove(eventName);
+
+        } catch (Exception e) {
+            throw new GlobalizationError(GlobalizationError.UNKNOWN_ERROR);
+        }
+    }
+    /*
+    /*
+     * @Description: Returns the BCP 47 language tag for the client's
      * current language. Currently in Android this is the same as locale,
      * since Java does not distinguish between locale and language.
      *
