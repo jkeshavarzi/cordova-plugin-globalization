@@ -21,6 +21,12 @@
 
 @implementation CDVGlobalization
 
+NSMutableDictionary *listeners;
+
++ (void)initialize {
+    listeners = [NSMutableDictionary dictionaryWithDictionary:@{}];
+}
+
 - (id)initWithWebView:(UIWebView*)theWebView
 {
     self = (CDVGlobalization*)[super initWithWebView:theWebView];
@@ -53,7 +59,7 @@
                 language = [NSString stringWithFormat:@"%@%@", language, [[locale localeIdentifier] substringWithRange:localeRange]];
             }
         }
-        
+
         language = [language stringByReplacingOccurrencesOfString:@"_" withString:@"-"];
 
         NSDictionary* dictionary = [NSDictionary dictionaryWithObject:language forKey:@"value"];
@@ -68,6 +74,84 @@
         result = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsDictionary:dictionary];
     }
 
+    [self.commandDelegate sendPluginResult:result callbackId:[command callbackId]];
+}
+
+-(void) refreshCurrencySymbol
+{
+    if (listeners[@"regionchanged"]) {
+        CDVInvokedUrlCommand *command = listeners[@"regionchanged"];
+        CDVPluginResult *result = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
+        [result setKeepCallback:[NSNumber numberWithBool:YES]];
+    
+        [self.commandDelegate sendPluginResult:result callbackId:[command callbackId]];
+    }
+}
+
+- (void)startEvent:(CDVInvokedUrlCommand*)command
+{
+    CDVPluginResult* result;
+    NSDictionary* options;
+    
+    if ([command.arguments count] > 0) {
+        options = [command.arguments objectAtIndex:0];
+    }
+    if (!options) {
+        result = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"no options given"];
+        [self.commandDelegate sendPluginResult:result callbackId:[command callbackId]];
+        return;
+    }
+    
+    NSString *eventName = [options valueForKey:@"eventName"];
+
+    if (![eventName isEqualToString:@"regionchanged"]) {
+        result = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:[eventName stringByAppendingString:@" is not a supported event on this platform"]];
+        [self.commandDelegate sendPluginResult:result callbackId:[command callbackId]];
+        return;
+    }
+    
+    if (listeners[eventName]) {
+        [[NSNotificationCenter defaultCenter] removeObserver:self name:NSCurrentLocaleDidChangeNotification object:nil];
+    }
+    
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(refreshCurrencySymbol) name:NSCurrentLocaleDidChangeNotification object:nil];
+    
+    listeners[eventName] = command;
+
+    result = [CDVPluginResult resultWithStatus:CDVCommandStatus_NO_RESULT];
+    [result setKeepCallback:[NSNumber numberWithBool:YES]];
+    
+    [self.commandDelegate sendPluginResult:result callbackId:[command callbackId]];
+}
+
+- (void)stopEvent:(CDVInvokedUrlCommand*)command
+{
+    CDVPluginResult* result;
+    NSDictionary* options;
+    
+    if ([command.arguments count] > 0) {
+        options = [command.arguments objectAtIndex:0];
+    }
+    if (!options) {
+        result = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"no options given"];
+        [self.commandDelegate sendPluginResult:result callbackId:[command callbackId]];
+        return;
+    }
+    
+    NSString *eventName = [options valueForKey:@"eventName"];
+    
+    if (!listeners[eventName]) {
+        result = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:[@"Underlying listener never started for " stringByAppendingString:eventName]];
+        [self.commandDelegate sendPluginResult:result callbackId:[command callbackId]];
+        return;
+    }
+    
+    [[NSNotificationCenter defaultCenter] removeObserver:self name:NSCurrentLocaleDidChangeNotification object:nil];
+    [listeners removeObjectForKey:eventName];
+    
+    result = [CDVPluginResult resultWithStatus:CDVCommandStatus_NO_RESULT];
+    [result setKeepCallback:[NSNumber numberWithBool:NO]];
+    
     [self.commandDelegate sendPluginResult:result callbackId:[command callbackId]];
 }
 

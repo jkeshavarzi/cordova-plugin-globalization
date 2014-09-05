@@ -39,7 +39,22 @@ typedef NSUInteger CDVGlobalizationError;
     CFLocaleRef currentLocale;
 }
 
+- (void)refreshCurrencySymbol;
 - (void)getPreferredLanguage:(CDVInvokedUrlCommand*)command;
+
+/**
+ * Starts the regionchange event. languagechange is not necessary and unsupported, since the
+ * application will be restarted by the os when language changes and can be handled on start
+ * options: "eventName" contains the event name to start
+ */
+- (void)startEvent:(CDVInvokedUrlCommand*)command;
+
+/**
+ * Stops the regionchange event
+ * options: "eventName" contains the event name to stop
+ */
+- (void)stopEvent:(CDVInvokedUrlCommand*)command;
+
 
 /**
  * Returns the string identifier for the clients current locale setting.
